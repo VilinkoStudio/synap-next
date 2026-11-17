@@ -1,0 +1,5 @@
+# 本地导出稿可保留在仓库内供讨论；忽略编辑器与 OS 垃圾
+.DS_Store
+*.swp
+.idea/
+.vscode/
