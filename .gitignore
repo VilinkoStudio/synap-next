@@ -21,3 +21,10 @@ app/macos/Pods/
 
 # flutter_rust_bridge 运行时下载物，不进仓
 app/android/app/src/main/jniLibs/
+
+# 原型期：云端只留文档，脚手架与代码暂不进仓（本地保留）。日后放开时删掉下面四行。
+/app/
+/crates/
+/Cargo.toml
+/Cargo.lock
+/justfile
