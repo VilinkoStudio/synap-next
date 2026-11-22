@@ -3,3 +3,21 @@
 *.swp
 .idea/
 .vscode/
+
+# Rust
+/target/
+**/*.rs.bk
+Cargo.lock.bk
+
+# Flutter
+app/.dart_tool/
+app/.flutter-plugins
+app/.flutter-plugins-dependencies
+app/build/
+app/android/.gradle/
+app/android/local.properties
+app/ios/Pods/
+app/macos/Pods/
+
+# flutter_rust_bridge 运行时下载物，不进仓
+app/android/app/src/main/jniLibs/

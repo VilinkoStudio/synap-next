@@ -1,0 +1,18 @@
+[package]
+name = "synap-bridge"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+
+[lib]
+crate-type = ["cdylib", "staticlib", "rlib"]
+
+[dependencies]
+synap-core.workspace = true
+synap-store.workspace = true
+synap-runtime.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+flutter_rust_bridge = "=2.13.0"
