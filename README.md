@@ -20,9 +20,9 @@
 | [001 哲学](docs/001-philosophy.md) | 新的概念和设计，关于统一存储、上层插件设计 |
 | [002 架构](docs/002-architecture.md) | 具体架构实现和技术选型 |
 | [003 产品形态](docs/003-product-shape.md) | 用户体验和产品的设计 |
-| [core 共享契约](crates/synap-core/DESIGN.md) | 词汇表：Block/Entity/Trait/Delta/Tombstone；crate 映射 |
-| [store 字节层](crates/synap-store/DESIGN.md) | 厚 Block、5 张 redb 表、Sans-IO 同步、Tombstone 删除 |
-| [runtime 语义层](crates/synap-runtime/DESIGN.md) | 四层插件契约、双插件分离、冲突分治、响应式计算图 |
+| [004 core 共享契约](docs/004-synap-core.md) | core crate：Rust 定义归属与 crate 映射，术语表见 001 |
+| [005 store 字节层](docs/005-synap-store.md) | 厚 Block、5 张 redb 表、Sans-IO 同步、Tombstone 删除 |
+| [006 runtime 语义层](docs/006-synap-runtime.md) | 四层插件契约、双插件分离、冲突分治、响应式计算图 |
 
 ## 开发
 
