@@ -1,13 +1,14 @@
 # 005 synap-store：字节层
 
-`store` 只管字节怎么存、怎么合并、怎么被读出来。不解读 `payload`，不认业务语义，对外全程保持**纯同步阻塞接口**。数据结构定义见 [004 synap-core](https://www.google.com/search?q=004-synap-core.md)。
+`store` 只管字节怎么存、怎么合并、怎么被读出来。不解读 `payload`，不认业务语义，对外全程保持**纯同步阻塞接口**。数据结构定义见 [004 synap-core](004-synap-core.md)。
 
 ## 1. 逻辑 Block 与物理管道
 
 CoW，只增不减，只有 CR 没有 UD：
 
 * **逻辑层：** 接收 `synap-core` 的 `Block`，落盘前校验或计算 `BlockHash = BLAKE3(canonical(Block))`。v1 约定 `payload` 为**自包含逻辑快照**（读任一 Head 即得完整状态，无需回溯祖先）；大二进制走独立 `Blob`，`payload` 里只存 `BlobHash`。
-* **创世约定：** `schema_hash == [0; 32]` 表示该块 `payload` 是原生 UTF-8 Lua 插件源码，其 `BlockHash` 即 `plugin_hash`，天然寻址，无需额外注册表。
+* **创世约定：** `schema_version == [0; 32]`（且 `schema_id == sys/plugin`）表示该块 `payload` 是原生 UTF-8 Lua 插件源码，其 `BlockHash` 即后续数据块引用的 `schema_version`，天然寻址，无需额外注册表。
+* **Schema 身份校验：** 落盘时校验新块的 `schema_id` 与其 `parents` 一致。一个实体的 `schema_id` 终身不变，这是 store 唯一读取的“语义”头部字段，不需要解读 payload。
 * **物理帧管道（Codec）：** 落盘和网络导出前，统一经过 Rust 原生管道：`Block -> 压缩(Zstd/LZ4) -> 加密(AEAD: ChaCha20-Poly1305 / AES-GCM, 随机 Nonce) -> 物理帧(codec_flags + nonce + ciphertext)`。读取时逆向解包并校验 AEAD tag。全过程对 Lua 插件透明。
 
 ## 2. 硬盘上永远只有 5 张 redb 表
@@ -15,10 +16,10 @@ CoW，只增不减，只有 CR 没有 UD：
 1. **`blocks`**：`[u8; 32] -> RawFrameBytes`。统一存放数据 Block、插件源码 Block 与 Blob（通过物理帧首字节区分 `Block / Blob` 种类），全部内容寻址。
 2. **`local_seq`**：`u64 -> BlockHash`。本地到达流水，无论本机写入还是远端同步，每落盘一个新块即 `+1`，驱动 `runtime` 的响应式计算。
 3. **`entity_heads`**：`EntityId -> Vec<BlockHash>`。每个实体的当前分叉头列表。写入新块时，从列表中移除其 `parents` 并加入新 `BlockHash`。
-4. **`projections`**：`(ProjNamespace, EncodedKey) -> Value`。所有常驻投影共享同一棵有序 B-Tree，靠命名空间隔离；计算定义一变即切新命名空间，旧空间待后台回收。
+4. **`projections`**：`(ProjNamespace, EncodedKey, EntityId) -> Value`。所有常驻投影索引共享同一棵有序 B-Tree，靠命名空间隔离；计算定义一变即切新命名空间，新空间后台建好前旧空间继续服务，切换后旧空间待回收。前台的 `range` 就是在这棵树上按 key 定位后顺序遍历，所以 value 里存的是可直接显示的数据（覆盖索引），滚动时不回读 `blocks`。
 5. **`meta`**：系统状态键值表，存放各投影的 `(ProjNamespace, local_seq 断点)`、插件代码三级信任表（可用/受信/激活）等。
 
-内存侧使用完全相同的 `KeyCodec` 配合 `BTreeMap`。`store` 暴露跨表原子事务：**常驻投影的 B-Tree 写入与其 `meta` 中的 `local_seq` 断点更新必须在同一事务内提交**，杜绝崩溃后重复应用或漏算 Delta。
+临时（不落盘）的投影索引在内存侧使用完全相同的 `KeyCodec` 配合 `BTreeMap`，对 `range` 来说两者没有区别。所有读取都走 redb 的 MVCC 读事务，读不阻塞写，读到的永远是一致快照。`store` 暴露跨表原子事务：**常驻投影的 B-Tree 写入与其 `meta` 中的 `local_seq` 断点更新必须在同一事务内提交**，杜绝崩溃后重复应用或漏算 Delta。
 
 ## 3. Sans-IO 同步引擎
 

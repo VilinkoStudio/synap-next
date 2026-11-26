@@ -1,3 +1,5 @@
+# 008 synap-future：外围扩展
+
 因为 `synap-store` 和 `synap-runtime` 都是纯 Rust 无头库，后续扩展能力全部作为独立 Crate 挂在外部，不塞进核心，也不走 `synap-bridge`：
 
 ### 1. `synap-net`（网络同步层）
@@ -11,4 +13,4 @@
 * **职责：** 直接依赖 `synap-runtime`，在本地（或受控内网）暴露标准的 HTTP / WebSocket / SSE 服务，让外部世界与官方 Flutter 客户端处于**完全平等的地位**。
 * **两类核心协议：**
 * **通用结构化 REST / Stream API：** 供 CLI 工具、本地脚本、浏览器插件以及未来的本地 Markdown 文件夹双向桥接器使用。
-* **原生 MCP（Model Context Protocol）端点：** 面向外部 AI Agent。不把大模型代码写进本项目，而是通过 MCP 把内核的完整上下文暴露出去——包括 Schema/Trait 自省、实时 Projection 查询、以及受沙箱和 CoW 不可变块保护的安全 Action 执行。外部 AI 既能精准读懂个人数据，也能安全写回结构化内容，甚至直接注册新的 Data Plugin。
+* **原生 MCP（Model Context Protocol）端点：** 面向外部 AI Agent。Trait 的写方法与 `Construct` 可以机械地生成为 MCP tools，读取形状、实现表与 `sys/backlinks` 构成类型化上下文（见 006 第 11 节）。不把大模型代码写进本项目，而是通过 MCP 把内核的完整上下文暴露出去——包括 Schema/Trait 自省、实时 Projection 查询、以及受沙箱和 CoW 不可变块保护的安全 Action 执行。外部 AI 既能精准读懂个人数据，也能安全写回结构化内容，甚至直接注册新的数据插件。

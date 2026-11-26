@@ -17,12 +17,14 @@
 | 文档 | 内容 |
 | --- | --- |
 | [000 与旧 Synap](docs/000-from-synap.md) | 为什么放弃了Synap而进行产品级的重构 |
-| [001 哲学](docs/001-philosophy.md) | 新的概念和设计，关于统一存储、上层插件设计 |
+| [001 哲学](docs/001-philosophy.md) | 统一存储；结构 / 能力 / 视图三分与组合；术语表 |
 | [002 架构](docs/002-architecture.md) | 具体架构实现和技术选型 |
 | [003 产品形态](docs/003-product-shape.md) | 用户体验和产品的设计 |
 | [004 core 共享契约](docs/004-synap-core.md) | core crate：Rust 定义归属与 crate 映射，术语表见 001 |
 | [005 store 字节层](docs/005-synap-store.md) | 厚 Block、5 张 redb 表、Sans-IO 同步、Tombstone 删除 |
-| [006 runtime 语义层](docs/006-synap-runtime.md) | 四层插件契约、双插件分离、冲突分治、响应式计算图 |
+| [006 runtime 类型系统](docs/006-synap-runtime.md) | Schema / 组件 / Trait / Impl、组合与委托、按组件合并、投影管道与 `get`/`range`/`watch` 读取 |
+| [007 app 宿主](docs/007-synap-app.md) | synap-bridge、Flutter 宿主、滚动读取、View 契约与视图实例 |
+| [008 外围扩展](docs/008-synap-future.md) | synap-net 同步传输、synap-http / MCP 网关 |
 
 ## 开发
 
@@ -31,7 +33,7 @@ UniFFI 第一版不引；要加时版本只写进根 `Cargo.toml` 的 `[workspac
 
 crates/synap-core/      # 共享契约：Block/Entity/Trait/Delta/Tombstone 定义，无重依赖
 crates/synap-store/     # 字节层：厚 Block、5 张 redb 表、Sans-IO 同步
-crates/synap-runtime/   # 语义层：Lua 插件沙箱、四层契约、响应式计算图
+crates/synap-runtime/   # 语义层：类型系统（Schema/组件/Trait/Impl）、Lua 沙箱、投影管道与游标读取
 crates/synap-bridge/    # 唯一 FFI 薄层：codegen 只扫这里的 api.rs，组装根+翻译层
 app/                    # Flutter 宿主（工作台 + Capture/Reader/Actions/Context 槽位）
 app/hook/build.dart     # 原生构建钩子：flutter run/build/test 自动编 Rust，无需手动 cargo-ndk
