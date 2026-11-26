@@ -1,58 +1,115 @@
-# synap-next
+<div align="center">
 
-以前的 Synap使用了碎片 + Tag + Link的形态，解决了部分碎片化记录的问题。但走向通用底座、插件互操作和 Agent 边界时，架构和设计都跟不上我们后来的想象。于是我们准备进行一次大重构，无论是从技术栈还是产品架构，具体的情况还在敲定。
+# Synap
 
+按类型记录，按情景回看。
 
-## 我们大致在做什么
+[![status](https://img.shields.io/badge/status-prototype-orange)](#状态)
+[![license](https://img.shields.io/github/license/VilinkoStudio/synap-next)](LICENSE)
+[![last commit](https://img.shields.io/github/last-commit/VilinkoStudio/synap-next)](https://github.com/VilinkoStudio/synap-next/commits)
+![stack](https://img.shields.io/badge/stack-Rust%20%2B%20Flutter-informational)
+
+</div>
 
 笔记会被拿去做完全不同的事：随手记、待办、AI 知识库、个人记录。这些事不该共用同一种组织结构。旧 Synap 用 DAG 去装全部，这条路不再走。
 
-我们使用一个统一的数据库原语，它是一个通用数据存储单元，包含版本和同步，允许不同的上层应用在上层进行建设，并且以不同形式与用户交互。插件可以有渐进式设计，并在插件之间使用松耦合进行交互。形成TodoList、知识库Wiki、个人复盘等各种结构化文字管理工具，他们基于统一的数据库原语，可以进行便携的同步。愿景应该类似一个个人文字原理平台，可以持续的以各种形态结构化的记录自己的信息。接入agent之后，形成一个内容池，里面有关于你的所有。也不必再手动整理内容到一个单一的session，然后复制出来。
+> [!NOTE]
+> Synap 仍处于原型实验阶段。本仓库目前只公开设计文档，下文描述的是设计目标，不是已经提供的功能。
 
+## 为什么做 Synap
 
-## 文档（内部讨论用）
+一个人的记录通常散落在好几个 App 里：待办、记账、日记、读书笔记各用一个。每个 App 都好用，但数据彼此隔开。想回顾一次旅行，就得在几个 App 之间来回翻找。
 
-按编号顺序读；后文只引用前文已出现的概念。原型期概念文档即规格，改实现前先改文档。
+Notion、Tana、Anytype 这类工具把数据放到了一起，但结构要用户自己搭：建库、配关系、写查询。
+
+Synap 的出发点是：人记录时按类型来记，一笔账、一条待办、一篇日记；回看时却按情景来看，这次旅行、这个项目、这学期。专门的 App 只照顾了前一半，Synap 想把两半都做好，并且不需要用户自己搭建任何结构。
+
+## 设计目标
+
+### 专注的工具
+
+待办、记账、日记各自是完整、好用的工具，有自己的页面和交互。Synap 不会为了"打通"而把不相关的数据混进同一个列表。
+
+### 共用的入口
+
+几样东西由所有工具共用：
+
+- **一个输入框**：输入"午饭 35，和小王"，记账工具会认出这是一笔支出，不用先想该打开哪个 App。
+- **一份待处理清单**：记账里待核实的账目、学习里待复习的内容、读书里待整理的摘录，会汇总到同一个地方，无需配置。
+- **一个搜索框和完整的历史**：所有记录都能搜到，能看到它被哪些内容引用，也能回到任意一个历史版本。
+
+### 情景
+
+一次旅行、一个项目、一门课，往往同时包含多种记录。Synap 把它们归到同一个情景里：
+
+```mermaid
+flowchart LR
+  T[待办<br/>订酒店 · 办签证] --> C
+  L[记账<br/>机票 · 餐饮 · 交通] --> C
+  D[日记<br/>每天的见闻] --> C
+  N[笔记<br/>行程攻略] --> C
+  C(("情景<br/>日本旅行"))
+  C --> P1[按时间排开的经过]
+  C --> P2[各工具给出的摘要<br/>总花费 · 未完成事项]
+  C --> P3[你自己写的回顾]
+```
+
+- 进入某个情景后，这段时间里新记下的内容会自动归入其中。
+- 情景页是一份可以阅读的记录：按时间顺序排列的经过，加上各个工具提供的摘要。它不是一块堆满数字的看板。
+- 做过的情景可以拿来当下一次的起点，比如"像上次旅行那样准备"。
+
+### 为小需求做小工具
+
+常见的 App 只覆盖最普遍的需求。记吃药、记健身组数、管理收藏，这类小需求很少有趁手的工具。
+
+Synap 计划支持让 AI 按你的描述生成这样的小工具。生成出来的工具和内置工具一样，能同步、搜索，也能出现在待处理清单和情景里。
+
+### 与 AI 协作
+
+Synap 不内置聊天窗口，而是通过标准接口连接你自己选择的 AI。AI 读到的是带结构的记录，而不是一堆零散的文本。一个情景就是一份现成的上下文；你也可以只授权 AI 读取某个情景，不开放整个库。
+
+## 与现有工具的区别
+
+| | 结构由谁搭建 | 数据是否在一处 | 使用前的配置 |
+| --- | --- | --- | --- |
+| 专门的 App | 开发者 | 否 | 几乎不需要 |
+| Notion / Tana / Anytype | 用户 | 是 | 较多 |
+| Synap | 工具作者或 AI | 是 | 选一套预设即可 |
+
+## 数据由你掌握
+
+- 数据保存在本地并加密。
+- 同步方式由你选择：局域网、自建服务器或对象存储。
+- 工具的定义和数据存放在一起。某个工具不再维护，数据也依然可读。
+
+## 状态
+
+Synap 是 [旧 Synap](https://github.com/VilinkoStudio/Synap) 之后的一次重新设计。旧版以碎片记录为核心，在扩展到待办、知识库等用途时遇到结构上的限制，所以从更底层重新开始。
+
+目前已经完成底层与产品形态的设计，原型正在本地实验。第一个版本要验证两件事：情景能不能让人留下来，小工具能不能让人愿意来用。
+
+- [x] 底层与产品形态设计
+- [ ] 存储、同步与查询的原型
+- [ ] 桌面与手机客户端
+- [ ] 首批工具：随手记、待办，以及记账或读书之一
+- [ ] 统一输入、待处理、情景
+- [ ] 通过 AI 生成小工具
+
+## 设计文档
+
+架构与实现细节见 [`docs/`](docs/)，按编号顺序阅读。原型阶段以文档为规格。
 
 | 文档 | 内容 |
 | --- | --- |
-| [000 与旧 Synap](docs/000-from-synap.md) | 为什么放弃了Synap而进行产品级的重构 |
-| [001 哲学](docs/001-philosophy.md) | 统一存储；结构 / 能力 / 视图三分与组合；术语表 |
-| [002 架构](docs/002-architecture.md) | 具体架构实现和技术选型 |
-| [003 产品形态](docs/003-product-shape.md) | 按类型生产、按情景消费：专注的工具、共享的接缝、情景、微内核宿主 |
-| [004 core 共享契约](docs/004-synap-core.md) | core crate：Rust 定义归属与 crate 映射，术语表见 001 |
-| [005 store 字节层](docs/005-synap-store.md) | 厚 Block、5 张 redb 表、Sans-IO 同步、Tombstone 删除 |
-| [006 runtime 类型系统](docs/006-synap-runtime.md) | Schema / 组件 / Trait / Impl、组合与委托、按组件合并、投影管道与 `get`/`range`/`watch` 读取 |
-| [007 app 宿主](docs/007-synap-app.md) | synap-bridge、Flutter 宿主、滚动读取、View 契约与视图实例 |
-| [008 外围扩展](docs/008-synap-future.md) | synap-net 同步传输、synap-http / MCP 网关 |
+| [000](docs/000-from-synap.md) | 与旧 Synap 的关系 |
+| [001](docs/001-philosophy.md) | 设计理念与术语 |
+| [002](docs/002-architecture.md) | 整体架构 |
+| [003](docs/003-product-shape.md) | 产品形态 |
+| [004](docs/004-synap-core.md) – [008](docs/008-synap-future.md) | 各模块规格 |
 
-## 开发
+## 参与
 
-纯 Flutter + Rust，不再有多端原生壳。单一 codegen 入口：flutter_rust_bridge。
-UniFFI 第一版不引；要加时版本只写进根 `Cargo.toml` 的 `[workspace.dependencies]`。
-
-crates/synap-core/      # 共享契约：Block/Entity/Trait/Delta/Tombstone 定义，无重依赖
-crates/synap-store/     # 字节层：厚 Block、5 张 redb 表、Sans-IO 同步
-crates/synap-runtime/   # 语义层：类型系统（Schema/组件/Trait/Impl）、Lua 沙箱、投影管道与游标读取
-crates/synap-bridge/    # 唯一 FFI 薄层：codegen 只扫这里的 api.rs，组装根+翻译层
-app/                    # Flutter 宿主（工作台 + Capture/Reader/Actions/Context 槽位）
-app/hook/build.dart     # 原生构建钩子：flutter run/build/test 自动编 Rust，无需手动 cargo-ndk
-```
-
-```sh
-cargo check --workspace --all-targets  # Rust 全仓
-cargo test --workspace --all-targets   # 写入通路回归
-just gen                               # 读 app/flutter_rust_bridge.yaml，生成 app/lib/bridge_generated/
-cd app && flutter analyze && flutter test   # test 会先触发 hook 自动编 Rust
-```
-
-构建方式：flutter_rust_bridge `native-assets` 后端。`flutter run/build/test`
-经 `hook/build.dart` 自动编译 `crates/synap-bridge` 并打包，不拷 `.so`、
-不手跑 cargo-ndk（旧仓 `build-android.sh` 那套不要了）。工具链钉在
-`crates/synap-bridge/rust-toolchain.toml`，`just` 经 `RUSTUP_TOOLCHAIN` 对齐。
-
-约束：`core`/`runtime` 不许出现 `flutter_rust_bridge` 依赖；`bridge` 只做翻译转发不写业务；
-投影缓存丢了重算，不做第二份真相。提交约定见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+现阶段最需要的是对设计的反馈：你会用它记什么，你想到的情景是什么，文档中哪里讲不通。欢迎在 Issue 中讨论。提交约定见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
 ## License
 
