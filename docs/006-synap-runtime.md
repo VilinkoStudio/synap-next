@@ -220,16 +220,28 @@ end
 | `std/Time` | `at: time?, due: time?` | lww | `std/Temporal` |
 | `std/Tags` | `tags: [string]` | set | `std/Tagged` |
 | `std/Children` | `children: [ref]` | seq | `std/Tree` |
+| `std/Members` | `members: [ref]` | set | `std/Context` |
+| `std/Attention` | `reason: string, since: hlc, due: time?` | lww | `std/Attention` |
 
-外加 `std/Construct`。`Amount` 这类领域能力先在插件命名空间里长，等真有第二个插件要用再提进来。
+另有两个不由组件提供、而由 Schema 直接实现的 Trait：
+
+* **`std/Construct`**：构造契约（§6）。
+* **`std/Capturable`**：统一入口的识别契约。它挂在 Schema 上而不是实例上——`capture(text) → { confidence, args }?`，返回 `nil` 表示“这段话不归我”。宿主把一段输入交给所有实现者，按置信度给出建议，用户确认后以 `args` 走 `Construct`。纯函数、确定性，不依赖 AI；接了 AI 时，AI 只是另一个给出 `args` 的来源。
+
+以及一个随标准库发布的 Schema：
+
+* **`std/context`（情景）** = `Title + Text + Time? + Members`。成员关系存在情景一侧，所以任何 Schema 的实体都能加入任何情景，被加入方零改动；“它属于哪些情景”由 `sys/backlinks` 反查。推断出的候选成员只是一条投影，用户确认后才写进 `members`。产品含义见 003 第四节。
+
+`Amount` 这类领域能力先在插件命名空间里长，等真有第二个插件要用再提进来。
 
 拿几个场景验算这套词汇够不够：
 
 * **思维导图不是数据类型**，是 bound 为 `Tree + HasText` 的视图；大纲笔记同样满足，于是同一棵树能在导图和大纲之间切换视角。它的数据怎么算出来，见 §9 末尾。
-* **日记里记一笔账**：日记正文 `ref` 一个 `ledger/entry`，宿主以卡片形态嵌入；账本视图通过记账插件自己的 Amount 投影立刻看到它。
-* **"今天"聚合页**：只认 `Temporal`，不认识任何 Schema；新类型只要实现 `Temporal` 就自动出现。
+* **“待处理”入口**：一条以 `std/Attention` 为源的公共投影。记账的“待核实”、学习的“待复习”各自用可选的 `Attention` 组件声明，宿主不认识其中任何一个。
+* **日本旅行**：一个 `std/context`，成员里有待办、`ledger/entry`、日记。情景页的时间线按成员的 `Temporal` 排开；“本次花费”是记账插件对这组成员给出的摘要。
+* **“今天”聚合页**：只认 `Temporal`，不认识任何 Schema；新类型只要实现 `Temporal` 就自动出现。
 
-后两条都落在"投影"上——词汇有了，接下来是怎么在这些词汇上做计算。
+后三条都落在“投影”上——词汇有了，接下来是怎么在这些词汇上做计算。
 
 ---
 

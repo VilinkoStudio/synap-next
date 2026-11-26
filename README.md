@@ -19,7 +19,7 @@
 | [000 与旧 Synap](docs/000-from-synap.md) | 为什么放弃了Synap而进行产品级的重构 |
 | [001 哲学](docs/001-philosophy.md) | 统一存储；结构 / 能力 / 视图三分与组合；术语表 |
 | [002 架构](docs/002-architecture.md) | 具体架构实现和技术选型 |
-| [003 产品形态](docs/003-product-shape.md) | 用户体验和产品的设计 |
+| [003 产品形态](docs/003-product-shape.md) | 按类型生产、按情景消费：专注的工具、共享的接缝、情景、微内核宿主 |
 | [004 core 共享契约](docs/004-synap-core.md) | core crate：Rust 定义归属与 crate 映射，术语表见 001 |
 | [005 store 字节层](docs/005-synap-store.md) | 厚 Block、5 张 redb 表、Sans-IO 同步、Tombstone 删除 |
 | [006 runtime 类型系统](docs/006-synap-runtime.md) | Schema / 组件 / Trait / Impl、组合与委托、按组件合并、投影管道与 `get`/`range`/`watch` 读取 |
