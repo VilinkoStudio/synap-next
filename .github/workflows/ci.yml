@@ -80,7 +80,9 @@ jobs:
         if: hashFiles('app/pubspec.yaml') != ''
         uses: subosito/flutter-action@v2
         with:
-          channel: stable
+          # 固定 SDK：新 stable 已把 package:flutter/material.dart 标记弃用，
+          # 版本漂移会直接让 analyze 失败。升级 SDK 时同步改 .fvmrc。
+          flutter-version: 3.44.0
           cache: true
 
       # 只跑 analyze：flutter test 会触发 native assets，构建 crates/synap-bridge，
