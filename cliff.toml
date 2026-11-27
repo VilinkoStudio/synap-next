@@ -1,0 +1,42 @@
+# release notes 由 Conventional Commits 生成：提交日志就是发布日志，不手写。
+# 模板按「类型 → 模块(scope)」聚类，类型顺序固定；没有 scope 的提交由 default_scope 兜底。
+# 因此 scope 词表必须稳定（见 CONTRIBUTING 的「提交」一节）。
+# 不启用 [remote.github]：不依赖 GitHub API，本地预览与 CI 输出一致。
+
+[changelog]
+header = ""
+body = """{% if version %}## {{ version | trim_start_matches(pat="v") }} — {{ timestamp | date(format="%Y-%m-%d") }}
+{% else %}## Unreleased
+{% endif %}
+{% for group in ["新增", "修复", "性能", "重构", "文档", "测试", "构建", "CI", "杂项", "其他"] %}{% set group_commits = commits | filter(attribute="group", value=group) %}{% if group_commits | length > 0 %}### {{ group }}
+{% for scope, scoped in group_commits | group_by(attribute="scope") %}
+- **{{ scope }}**{% for commit in scoped %}
+  - {{ commit.message | split(pat="\n") | first | upper_first }}{% if commit.breaking %} — **BREAKING**：{{ commit.breaking_description }}{% endif %}{% endfor %}{% endfor %}
+
+{% endif %}{% endfor %}"""
+footer = ""
+# trim 会吃掉每行前导空格，嵌套列表的缩进就没了；保持 false。
+trim = false
+
+[git]
+conventional_commits = true
+# 不合规范的提交不丢弃，落到「其他」组：release note 里看不见的提交比写得难看更糟。
+filter_unconventional = false
+split_commits = false
+filter_commits = false
+topo_order = false
+sort_commits = "oldest"
+protect_breaking_commits = true
+commit_parsers = [
+    { message = "^feat", group = "新增", default_scope = "repo" },
+    { message = "^fix", group = "修复", default_scope = "repo" },
+    { message = "^perf", group = "性能", default_scope = "repo" },
+    { message = "^refactor", group = "重构", default_scope = "repo" },
+    { message = "^docs", group = "文档", default_scope = "docs" },
+    { message = "^test", group = "测试", default_scope = "tests" },
+    { message = "^build", group = "构建", default_scope = "build" },
+    { message = "^ci", group = "CI", default_scope = "ci" },
+    { message = "^chore\\(release\\)", skip = true },
+    { message = "^chore", group = "杂项", default_scope = "repo" },
+    { message = ".*", group = "其他", default_scope = "misc" },
+]
