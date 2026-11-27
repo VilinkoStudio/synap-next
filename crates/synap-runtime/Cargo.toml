@@ -1,0 +1,14 @@
+[package]
+name = "synap-runtime"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+synap-core.workspace = true
+synap-store.workspace = true
+blake3.workspace = true
+thiserror.workspace = true
+serde_json.workspace = true
+# LuaJIT。要的是 5.1 语义 + JIT；`vendored` 自带源码，不依赖系统 libluajit。
+mlua = { version = "0.12", features = ["luajit", "vendored"] }

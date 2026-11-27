@@ -1,0 +1,20 @@
+# 不在根工作区里（见根 Cargo.toml 的 exclude），所以这里不能继承 workspace 字段：
+# edition/license 与依赖都写成显式值。改动根 Cargo.toml 的版本时，这里要同步。
+[package]
+name = "synap-bridge"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+
+[lib]
+crate-type = ["cdylib", "staticlib", "rlib"]
+
+[dependencies]
+synap-core = { path = "../synap-core" }
+synap-store = { path = "../synap-store" }
+synap-runtime = { path = "../synap-runtime" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+tokio = { version = "1", features = ["rt", "rt-multi-thread", "sync", "macros", "time"] }
+flutter_rust_bridge = "=2.13.0"
