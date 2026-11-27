@@ -1,40 +1,56 @@
 # 007 synap-app：宿主、桥与视图
 
-本文档界定内核之外的边界：官方 Flutter 客户端如何通过 `synap-bridge` 接上内核，以及宿主、视图与第一方插件如何分工。网络同步与对外接口见 [008](008-synap-future.md)。产品交互原则见 [003 产品形态](003-product-shape.md)，类型系统见 [006 runtime](006-synap-runtime.md)。
-
-```text
-Workspace 演进全景：
-
-核心层（无头）：   synap-core ◀── synap-store ◀── synap-runtime
-                                      ▲                 ▲
-外围接入层：       synap-net (网络同步) ┘                 ├── synap-bridge (专供 Flutter FFI)
-                                                        └── synap-http   (统一 HTTP / MCP 接口)
-
-```
+本文档界定官方 Flutter 客户端的边界：它怎样接上内核，宿主、视图与第一方插件怎样分工。无头节点、网络同步与对外接口见 [008](008-synap-node.md)，产品交互原则见 [003 产品形态](003-product-shape.md)，类型系统见 [006 runtime](006-synap-runtime.md)。
 
 ---
 
-## 一、`synap-bridge`：专供 Flutter 的 C-ABI 褪壳层
+## 一、内核怎样到达 Dart：一套接口，两种后端
 
-`synap-bridge` **不是**通用对外 API，它只服务于一件事：**把 Rust 内核的类型系统“褪壳”，翻译成适合 C ABI 与 `flutter_rust_bridge`（FRB）的平坦接口给 Dart 调用。**
+客户端有两种运行方式：桌面与手机把内核嵌在本地；浏览器里的 Web 版没有本地数据库，连接一个 `synap-node`。为了让宿主和视图对此一无所知，Dart 侧只认一个接口：
 
-* **为什么必须独立成一层：** Rust 侧大量使用泛型、生命周期、带负载的嵌套 Enum、`Arc`/Trait 对象与零拷贝切片，这些概念无法直接穿过 C ABI。`synap-bridge` 负责把它们压扁成拥有所有权的平坦 DTO（`struct`、简单 `enum`、`Vec<u8>` 或规范化编码载荷）以及不透明的订阅句柄。
-* **零业务逻辑铁律：** `bridge` 内部只持有一个 `Arc<Runtime>`，严禁出现任何业务判断、缓存逻辑或数据拼装。
-* **暴露面极窄，只有 5 类入口：**
-1. `open_vault / close_vault`：初始化数据目录、解锁密钥、启动 `runtime`。
-2. `get / range / range_many / watch`：读取原语（语义见 006 §9.4）。`range` 一次 FFI 调用返回一整批行和下一个游标；`range_many` 把多个前缀的 `range` 合成一次调用（导图逐层展开用）；`watch(index, key_range) -> Stream<DeltaBatchDto>` 只推送落入该区间的 Delta。临时投影也走这一入口，只算一次。
-3. `dispatch_action(WriteReq)`：唯一写入口。`WriteReq` 只有两种形态——`TraitCall { entity_id, trait_id, method, args }` 与 `Construct { schema_id, args }`；插件管理（信任升级、归档）走保留的 `sys/*` Trait。
+```mermaid
+flowchart LR
+  V[视图 · RangeStore · 宿主] --> B{{SynapBackend}}
+  B --> F[FfiBackend]
+  B --> R[RemoteBackend]
+  F --> BR[synap-bridge · 本地内核]
+  R --> H[synap-http · 远端节点]
+```
+
+`SynapBackend` 的方法与 002 定义的窄腰一一对应，只有 5 类：
+
+1. `open_vault / close_vault`：打开数据目录并解锁（本地），或连接并认证某个节点上的库（远端）。
+2. `get / range / range_many / watch`：读取原语（语义见 006 §10.4）。`range` 一次调用返回一整批行和下一个游标；`range_many` 把多个前缀的 `range` 合成一次调用（导图逐层展开用）；`watch(index, key_range) -> Stream<DeltaBatch>` 只推送落入该区间的 Delta。临时投影也走这一入口，只算一次。
+3. `dispatch(WriteReq)`：唯一写入口。`WriteReq` 只有两种形态——`TraitCall { entity_id, trait_id, method, args }` 与 `Construct { schema_id, args }`；插件管理（信任升级、归档）走保留的 `sys/*` Trait。
 4. `inspect_entity(entity_id)`：拉取实体的 `SchemaId`、当前具备的 Trait 列表、Heads、历史版本链与字段级冲突详情（用于 Lens 切换、时间轴和冲突 Diff 界面）。
-5. `sync_trigger / export_trigger`：触发外部同步器或文件桥接导入导出。
+5. `sync_trigger / export_trigger`：触发同步或文件导入导出。
 
-**关键联动——用 FFI 生命周期直接驱动内核 GC：**
-当 Flutter 中某个视图被关闭、或列表滚走后某段区间不再需要时，Dart 取消对应 `watch` 的 `StreamSubscription`，FRB 自动 Drop Rust 侧的流发送端。`synap-runtime` 捕获到断开后，把这段区间从 GC Roots 中移除；某条管道再无任何区间被监听时转入休眠池。前端完全不需要手写任何“清理内核缓存”的代码。
+视图、`RangeStore` 与宿主只依赖这个接口，从不判断数据在本地还是远端。
+
+### `FfiBackend` 与 `synap-bridge`
+
+`synap-bridge` 只做一件事：**把 Rust 内核的类型系统“褪壳”，翻译成适合 C ABI 与 `flutter_rust_bridge`（FRB）的平坦接口。**
+
+* **为什么必须独立成一层：** Rust 侧大量使用泛型、生命周期、带负载的嵌套 Enum、`Arc`/Trait 对象与零拷贝切片，这些概念无法直接穿过 C ABI。`synap-bridge` 把它们压扁成拥有所有权的平坦 DTO（`struct`、简单 `enum`、`Vec<u8>` 或规范化编码载荷）以及不透明的订阅句柄。
+* **零业务逻辑铁律：** 内部只持有一个 `Arc<Runtime>`，严禁出现任何业务判断、缓存逻辑或数据拼装。
+
+### `RemoteBackend` 与 Web 客户端
+
+Flutter Web 是客户端渲染：构建产物是一组静态文件，由节点直接托管，节点不为界面保存任何状态。浏览器里**不运行内核**——redb 用不了浏览器的存储，LuaJIT 也编译不到 Wasm——而是由 `RemoteBackend` 经 `synap-http` 调用节点：请求走 HTTP，`watch` 走 WebSocket。
+
+* **滚动依然不等数据：** 网络比 FFI 慢一到两个数量级，但 `RangeStore` 本来就提前一屏预取，延迟被预取掩盖；`range_many` 让导图展开仍是每层一次往返。
+* **同一个客户端，也能连节点：** 手机和桌面同样可以选择“连接我的节点”，不在本地保存完整数据。
+* **代价：** Web 版首次加载体积较大，文本输入在浏览器里偶有怪异；它适合作为个人节点的界面，不适合作为公开网站。
+
+### 订阅生命周期直接驱动内核 GC
+
+当某个视图被关闭、或列表滚走后某段区间不再需要时，Dart 取消对应 `watch` 的 `StreamSubscription`。本地时 FRB 自动 Drop Rust 侧的流发送端，远端时对应的 WebSocket 订阅随之取消；两种情况下 `synap-runtime` 都会把这段区间从 GC Roots 中移除，某条管道再无任何区间被监听时转入休眠池。前端完全不需要手写任何“清理内核缓存”的代码。
 
 ---
 
 ## 二、Flutter 宿主：微内核
 
-宿主是一个极轻的**无状态渲染壳**：不建本地 SQLite/Isar，不写 ORM，除了极少量纯本机偏好（暗黑模式、窗口尺寸）外，所有业务状态都由 `get` / `range` / `watch` 读到的投影驱动。
+宿主是一个极轻的**无状态渲染壳**：不建本地 SQLite/Isar，不写 ORM，除了极少量纯本机偏好（暗黑模式、窗口尺寸）外，所有业务状态都由经 `SynapBackend` 读到的投影驱动。
 
 它同时是一个**微内核**：只保留做成插件就不安全、或会造成循环依赖的部分——打开库与解锁、插件加载与信任、设计系统、导航框架与视图解析（Lens、嵌入、兜底）、通用 Trait 视图、冲突处理与历史回滚，以及统一入口的系统槽位。其余一切（随手记、待办、情景、今天、收件箱、搜索界面、入口输入框）都是随安装包发行的第一方插件，与第三方走同一套接口。边界的产品理由与两个守则（自举测试、吃自己的狗粮）见 003 第六节。
 

@@ -13,6 +13,7 @@
 * **`TraitId { name: String, major: u16 }`**：Trait 身份，如 `std/Checkable@1`；只有大版本参与身份，小版本须向后兼容。
 * **`LocalSeq(u64)`**：本机单调自增到达流水号，永不跨端同步。
 * **`Hlc`**：混合逻辑时钟 `{ physical_ms: u64, logical: u16, node_id: u32 }`，实现 `Ord`，用于跨端偏序收敛与 LWW 决断。
+* **`SyncId([u8; 32])`**：块在同步层的对外身份，`SyncId = BLAKE3_keyed(sync_key, BlockHash)`，`sync_key` 由库密钥派生。同一个库的所有设备对同一块算出同一个 `SyncId`，而不持有密钥的一方无法从它反推 `BlockHash`，也无法用猜测的明文去比对。
 * **`ProjNamespace`**：`{ proj_id: String, def_hash: [u8; 32] }`，投影的完整物理身份，定义哈希涵盖所依赖的 Trait 版本、相关 Impl 所在插件版本、算子定义与 Host API 版本。
 
 ## 2. 逻辑 Block 与物理帧分离
@@ -21,6 +22,9 @@
 
 ```rust
 pub struct BlockHeader {
+    /// 块格式版本。规范化编码按版本冻结，引擎永远能读所有历史版本，
+    /// 从不改写旧块；原型期固定为 0，允许破坏性修改（见 005 §5）
+    pub format: u16,
     pub entity_id: EntityId,
     /// 本 Entity 的祖先哈希；规范化编码前必须按字典序排序去重
     pub parents: Vec<BlockHash>,
@@ -36,7 +40,8 @@ pub struct BlockHeader {
 
 pub struct Block {
     pub header: BlockHeader,
-    /// v1 为自包含逻辑快照，按组件分区的 CanonicalValue 编码；
+    /// v1 为自包含逻辑快照，按组件分区的 CanonicalValue 编码，
+    /// 每个分区带自己的定义版本（扩展组件的分区由扩展插件定义）；
     /// store 不解读，runtime 据 schema 解码
     pub payload: Vec<u8>,
 }
@@ -44,6 +49,7 @@ pub struct Block {
 ```
 
 * **逻辑哈希计算：** `BlockHash = BLAKE3(canonical_encode(Block))`。
+* **迁移块确定性：** 插件升级时 runtime 写入的迁移块，内容只由父块与新版本决定，`hlc` 取父块中的最大值、不读本机时钟，因此多台设备迁移同一实体得到同一个 `BlockHash`（见 006 §6.3）。
 * **物理帧元数据（`codec_flags`、`nonce`、AEAD tag）：** 归 `synap-store` 的物理管道管理，不进入 `BlockHeader`，因此更换压缩级别或重新加密绝不会改变 `BlockHash`。
 
 ## 3. 确定性编码规范（硬约束）

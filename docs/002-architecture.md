@@ -3,22 +3,29 @@
 整体架构是一个**沙漏模型**：两头宽，中间窄。
 
 * **下层宽（重底座）：** 承接操作系统能力、网络传输、嵌入式 KV 存储、加解密压缩管道、Merkle-DAG 同步与响应式增量计算，把最脏最重的系统工程全部消化掉。
-* **中间窄（薄契约）：** 对上层收束成极窄的一组核心抽象——**读投影（`get` / `range` / `watch`）、通过 Trait 写入**。这不是简单的 CRUD API 转发，而是用概念约束换取上下层的彻底解耦。
+* **中间窄（薄契约）：** 对上层收束成极窄的一组核心抽象——**读投影（`get` / `range` / `watch`）、通过 Trait 写入**。这不是简单的 CRUD API 转发，而是用概念约束换取上下层的彻底解耦。这条契约**与传输方式无关**：同一组调用可以走进程内的 FFI，也可以走网络。
 * **上层宽（多形态）：** 在这条窄腰之上，长出由组件拼成的各种 Schema、只认 Trait 的视图，以及通过标准接口平等接入的外部工具与 AI Agent。
+
+因为窄腰与传输无关，同一个内核自然有**两种产出**：
+
+| 产出 | 形态 | 用途 |
+| --- | --- | --- |
+| **Synap 客户端** | Flutter 应用。桌面与手机把内核嵌在本地（FFI）；Web 版是浏览器里的薄客户端，经网络连接节点 | 普通用户的日常使用 |
+| **`synap-node`** | 无头节点：一个二进制或 Docker 镜像，提供 CLI、HTTP / MCP、同步，并托管 Web 客户端的静态文件 | 个人服务器、一直在线的同步对端、AI 的接入点，也可以作为自己其他项目的小型数据后端 |
+
+两者是同一套 Rust 代码的两种装配。节点可以先于客户端独立迭代：存储、同步、类型系统与投影都能在没有任何界面时经 CLI 跑通。
 
 ```mermaid
 flowchart TB
   subgraph clients [客户端与外部协作者]
-    subgraph host [官方宿主 · Flutter]
-      UI[视图 · 声明 Trait bound]
-      F[宿主工作台 · 组件库与导航]
-    end
+    NAT[Flutter 桌面 / 手机]
+    WEB[Flutter Web · 薄客户端]
     EXT[外部工具 / CLI / AI Agent]
   end
 
-  subgraph iface [对外接口层]
-    BR[synap-bridge · FFI 桥]
-    API[结构化本地接口 · RPC / MCP]
+  subgraph iface [窄腰：同一契约的两种传输]
+    BR[synap-bridge · FFI]
+    HTTP[synap-http · HTTP / WebSocket / MCP]
   end
 
   subgraph rt [synap-runtime · 语义层]
@@ -31,18 +38,20 @@ flowchart TB
     SY[Sans-IO 同步引擎]
   end
 
-  UI --> F
-  F <--> BR
-  EXT <--> API
+  NET[synap-net · 同步传输]
+
+  NAT <--> BR
+  WEB <--> HTTP
+  EXT <--> HTTP
   BR <--> CG
-  API <--> CG
+  HTTP <--> CG
   LP <--> CG
   CG <--> BL
   BL <--> SY
-
+  SY <--> NET
 ```
 
-Rust 侧按职责拆成四个 Crate（`synap-core`、`synap-store`、`synap-runtime`、`synap-bridge`），单向依赖，模块映射见 [004 synap-core](004-synap-core.md)。Todo、Wiki、个人记录全部落在数据插件（Schema、组件、Impl）和投影里，内核一行业务代码都不写。
+Rust 侧的核心是三个无头 Crate（`synap-core`、`synap-store`、`synap-runtime`），单向依赖，模块映射见 [004 synap-core](004-synap-core.md)；外围按接入方式各挂一个薄层：`synap-bridge`（FFI）、`synap-http`（网络接口）、`synap-net`（同步传输）。桌面与手机客户端装配 `synap-bridge` 与 `synap-net`，`synap-node` 装配 `synap-http` 与 `synap-net`，见 [008](008-synap-node.md)。Todo、Wiki、个人记录全部落在数据插件（Schema、组件、Impl）和投影里，内核一行业务代码都不写。
 
 ---
 
@@ -68,19 +77,21 @@ Rust 内核保持绝对的 **Headless（无头）**，不依赖任何图形框�
 Rust 负责类型系统、调度与状态维护，嵌入 LuaJIT（`mlua`）运行插件逻辑（详见 [006 runtime](006-synap-runtime.md)）：
 
 * **纯函数沙箱：** 数据插件源码作为创世约定的 Block（见 004）加载进沙箱，屏蔽时间、随机数、文件 IO 等非确定性接口，仅注入原生编解码加速函数。
-* **类型系统原生化：** Schema 由组件组合，解码、按组件委托的合并、Trait 委托都在 Rust 侧完成；Lua 只写组件与 Impl 自己的那点逻辑（`construct`、`extract`、写方法、`upgrade`、可选的自定义 `merge`）。维护一张 `(TraitId, SchemaId) → Impl` 实现表，遵守孤儿规则。
+* **类型系统原生化：** Schema 由组件组合，解码、按组件委托的合并、Trait 委托都在 Rust 侧完成；Lua 只写组件与 Impl 自己的那点逻辑（`construct`、`extract`、写方法、`upgrade`、可选的自定义 `merge`）。维护一张 `(TraitId, SchemaId) → Impl` 实现表；插件之间的依赖一律锁定大版本，插件升级时全部实体一起迁移，旧版本代码按引用计数回收。
 * **冲突分治：** 单实体多 Head 按组件逐字段合并，合并失败才产生精确到字段的 `Conflict`；跨实体约束破坏（如引用成环）由独立校验投影检出。
 * **投影管道：** 投影是以 Trait 为源、闭包只看一条记录的算子管道，以 `local_seq` 为心跳、在 Delta 上增量执行（按拓扑深度批处理，输出不变时早停），终点是有序 B-Tree 索引。被监听时增量维护，只问一次时算完即丢；递归不进管道，由读取侧按需驱动。
 * **游标式读取与 GC：** 对外只有 `get` / `range` / `watch` 三个读取原语，`range` 以 key 为游标在 MVCC 快照上顺序读，成本与库的大小无关。GC Roots = 活跃 `watch` + 常驻索引；失去监听的管道休眠并记下 `local_seq` 断点，超时或内存吃紧按 LRU 回收；定义变更时后台重建新命名空间，旧的继续服务直到原子切换。
 
 ---
 
-## 二、对外接口层：FFI 桥与外部平等接入
+## 二、对外接口层：一套契约，两种传输
 
-内核从一开始就面向两类调用方，且两者在权限和能力上完全平等：
+内核面向的调用方——官方客户端、外部脚本、AI Agent——在权限和能力上完全平等，看到的是同一组入口：打开库、读取原语（`get` / `range` / `watch`）、唯一写入口（Trait 写方法或构造）、实体自省、同步与导入导出。区别只在传输：
 
-* **`synap-bridge`（Flutter FFI 桥）：** 是 Rust 内核通往官方 Flutter 宿主的唯一边界，`flutter_rust_bridge` 的代码生成只扫描这里的公开函数。严禁写业务逻辑，只负责类型翻译、Action 转发，以及把投影增量封装成异步 `Stream` 推给 Dart。
-* **外部结构化接口（CLI / 本地服务 / AI Agent）：** 内核向上暴露完整的自省与执行能力——外部调用方可以查询实体历史、读取 Schema 与 Trait 契约、读取与监听投影，或提交一条只算一次的临时投影，也可以带着完整上下文通过 Trait 写方法或构造发起写入，甚至注册新插件。所有外部写入同样经过沙箱校验与 CoW 不可变块保护，随时可回滚。
+* **`synap-bridge`（进程内 FFI）：** 内核嵌在本机进程里时使用。`flutter_rust_bridge` 的代码生成只扫描这里的公开函数；它严禁写业务逻辑，只负责类型翻译与转发，把 `watch` 封装成异步 `Stream` 推给 Dart。
+* **`synap-http`（网络）：** 内核运行在节点上时使用。同一组入口映射为 HTTP 请求，`watch` 走 WebSocket；另外提供 MCP 端点：几个通用工具加上自省，供 AI Agent 使用（见 006 §12）。Flutter Web 客户端和外部工具都走这一层。
+
+两层都只是翻译，不各自扩展语义；任何新能力先进契约，再同时出现在两种传输上。外部写入与本地写入一样经过沙箱校验与 CoW 不可变块保护，随时可回滚。
 
 ---
 
