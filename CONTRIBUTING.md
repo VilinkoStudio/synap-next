@@ -1,6 +1,6 @@
 # 贡献约定
 
-从旧 Synap 的 `CONTRIBUTING.md` 留下还能用的部分。平台 tag、分端发版、`core → ffi → 各端` 的提交顺序都绑在旧 monorepo 上，不搬过来。旧仓库的 ADR、桌面设计稿、构建说明同样留在 `/data/projects/Synap`。
+从旧 Synap 的 `CONTRIBUTING.md` 留下还能用的部分。平台 tag、分端发版、`core → ffi → 各端` 的提交顺序都绑在旧 monorepo 上，不搬过来。旧仓库的 ADR、桌面设计稿、构建说明同样留在 [旧 Synap 仓库](https://github.com/VilinkoStudio/Synap)。
 
 ## 提交
 
@@ -20,7 +20,7 @@ Conventional Commits：
 
 ## 分支
 
-`master` 保持别人拉下来就能读、后来有代码时也能构建。试探用 `feat/*`、`docs/*`、`spike/*`。
+`main` 保持别人拉下来就能读、后来有代码时也能构建。试探用 `feat/*`、`docs/*`、`spike/*`。
 
 ## 文档
 
