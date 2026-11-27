@@ -1,0 +1,67 @@
+name: ci
+
+on:
+  push:
+    branches: [dev, main]
+    # 纯文档提交不跑构建
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+      - "LICENSE"
+  pull_request:
+    branches: [dev, main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # crates/ 与 app/ 目前还在 .gitignore 里，下面的步骤按文件存在与否自动跳过。
+      # 代码进仓后这里自然生效，不需要再改 workflow。
+
+      - name: Rust 工具链
+        if: hashFiles('Cargo.toml') != ''
+        uses: actions-rust-lang/setup-rust-toolchain@v2
+        with:
+          # 与 justfile 的 RUSTUP_TOOLCHAIN 保持同值
+          toolchain: nightly-2026-02-28
+          components: rustfmt, clippy
+
+      - name: Rust 编译缓存
+        if: hashFiles('Cargo.toml') != ''
+        uses: Swatinem/rust-cache@v2
+
+      - name: cargo fmt
+        if: hashFiles('Cargo.toml') != ''
+        run: cargo fmt --all --check
+
+      - name: cargo clippy
+        if: hashFiles('Cargo.toml') != ''
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: cargo test
+        if: hashFiles('Cargo.toml') != ''
+        run: cargo test --workspace --all-targets
+
+      - name: Flutter
+        if: hashFiles('app/pubspec.yaml') != ''
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: flutter analyze + test
+        if: hashFiles('app/pubspec.yaml') != ''
+        working-directory: app
+        run: |
+          flutter pub get
+          flutter analyze
+          flutter test
