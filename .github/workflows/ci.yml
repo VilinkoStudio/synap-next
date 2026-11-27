@@ -10,6 +10,8 @@ on:
       - "LICENSE"
   pull_request:
     branches: [dev, main]
+    # 标题也是发布内容：改了标题要重新校验
+    types: [opened, synchronize, reopened, edited]
 
 permissions:
   contents: read
@@ -19,6 +21,29 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # PR 标题 = squash 后的提交标题 = release note 的一行，所以在这里挡住不合规的
+  pr-title:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: 校验 PR 标题
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          types='feat|fix|refactor|perf|docs|test|build|ci|chore'
+          if ! [[ "$TITLE" =~ ^($types)(\([a-z0-9._-]+\))?!?:\ .+ ]]; then
+            echo "::error::PR 标题必须形如 feat(store): 短句，收到：$TITLE"
+            exit 1
+          fi
+          # 代码类提交的 scope 只能是模块词表里的名字（见 CONTRIBUTING）
+          if [[ "$TITLE" =~ ^(feat|fix|refactor|perf|build|ci)\(([a-z0-9._-]+)\) ]]; then
+            scope="${BASH_REMATCH[2]}"
+            case ",core,store,runtime,node,relay,http,sync,bridge,app,repo,ci,deps," in
+              *",$scope,"*) ;;
+              *) echo "::error::scope '$scope' 不在词表里"; exit 1 ;;
+            esac
+          fi
+
   verify:
     runs-on: ubuntu-latest
     steps:
