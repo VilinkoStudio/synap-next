@@ -1,0 +1,15 @@
+# 镜像只需 workspace 清单和 synap-node 的依赖 crate
+.git
+.github
+app
+docs
+target
+**/target
+crates/synap-bridge
+**/*.md
+.idea
+.vscode
+.DS_Store
+*.swp
+.fvmrc
+data

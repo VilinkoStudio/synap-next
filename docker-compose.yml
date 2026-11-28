@@ -1,0 +1,8 @@
+services:
+  synap-node:
+    build: .
+    image: synap-node:dev
+    ports:
+      - "8790:8790"
+    volumes:
+      - ./data:/data
