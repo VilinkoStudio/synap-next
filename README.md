@@ -84,6 +84,29 @@ Synap 不内置聊天窗口，而是通过标准接口连接你自己选择的 A
 - 工具的定义和数据存放在一起。某个工具不再维护，数据也依然可读。
 - 随时能把整个库导出成一个文件一份记录的明文，改完还能导回来，历史不会丢。
 
+无头节点现在可以从源码安装，或打成较小的 musl 镜像部署。安装需要 Rust 工具链和 C 编译器（LuaJIT 随源码编译）：
+
+```bash
+cargo install --locked --git https://github.com/VilinkoStudio/synap-next.git synap-node
+synap-node init --data-dir ./data
+synap-node serve --data-dir ./data
+```
+
+在仓库里也可以 `cargo install --locked --path crates/synap-node`，或 `just install-node`。默认听 `127.0.0.1:8790`。
+
+```bash
+docker compose up --build
+```
+
+或不用 compose：
+
+```bash
+docker build -t synap-node .
+docker run --rm -p 8790:8790 -v "$PWD/data:/data" synap-node
+```
+
+镜像默认听 `0.0.0.0:8790`，数据写在 `/data`；`serve` 会在空目录里建库。若 `docker build` 提示缺少 buildx，前面加上 `DOCKER_BUILDKIT=0`，或先安装 docker-buildx。
+
 ## 状态
 
 Synap 是 [旧 Synap](https://github.com/VilinkoStudio/Synap) 之后的一次重新设计。旧版以碎片记录为核心，在扩展到待办、知识库等用途时遇到结构上的限制，所以从更底层重新开始。

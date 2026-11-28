@@ -21,3 +21,26 @@ gen:
 
 bridge-check:
     cargo check --manifest-path crates/synap-bridge/Cargo.toml
+
+# 把 synap-node 装到 ~/.cargo/bin。需要本机 C 编译器（LuaJIT 随源码编）。
+install-node:
+    cargo install --path crates/synap-node --locked --force
+
+# 用 musl 静态编译 synap-node，生成较小的 scratch 镜像。
+# 没有 docker-buildx 时退回旧版 builder。
+docker-node:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if docker buildx version >/dev/null 2>&1; then
+        docker build -t synap-node:dev .
+    else
+        DOCKER_BUILDKIT=0 docker build -t synap-node:dev .
+    fi
+
+docker-node-run *args:
+    docker run --rm -p 8790:8790 -v "$PWD/data:/data" {{args}} synap-node:dev
+
+# 用 compose 构建并前台启动，数据在 ./data。serve 会在空目录里建库。
+docker-node-up *args:
+    docker compose up --build {{args}}
+

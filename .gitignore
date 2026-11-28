@@ -21,3 +21,6 @@ app/macos/Pods/
 
 # flutter_rust_bridge 运行时下载物，不进仓
 app/android/app/src/main/jniLibs/
+
+# 本地节点数据（compose / docker run 默认挂载目录）
+/data/
